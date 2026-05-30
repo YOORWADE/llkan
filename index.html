@@ -1,0 +1,1894 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>豆豆 连连看</title>
+  <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #5a4763;
+      --muted: #9785a6;
+      --line: #ff7eb3;
+      --mint: #2fcfae;
+      --pink: #ff8fb6;
+      --sky: #76c6ff;
+      --sun: #ffce4d;
+      --panel: rgba(255, 255, 255, 0.62);
+      --panel-strong: rgba(255, 255, 255, 0.82);
+      --soft-shadow: 0 16px 36px rgba(255, 145, 185, 0.22);
+      --tile-gap: 6px;
+      --radius: 14px;
+      --rows: 10;
+      --cols: 14;
+      --tile-font: 23px;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 12% 16%, rgba(255, 183, 214, 0.6), transparent 38%),
+        radial-gradient(circle at 88% 10%, rgba(150, 224, 255, 0.55), transparent 40%),
+        radial-gradient(circle at 72% 88%, rgba(180, 245, 205, 0.55), transparent 42%),
+        linear-gradient(160deg, #fff1f7, #eef7ff 46%, #eafff1);
+      color: var(--ink);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    /* floating cute decorations */
+    .decor {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .decor span {
+      position: absolute;
+      left: var(--x);
+      top: var(--y);
+      font-size: var(--s, 30px);
+      opacity: 0.5;
+      filter: drop-shadow(0 6px 10px rgba(255, 150, 190, 0.3));
+      animation: floaty 7s ease-in-out infinite;
+      animation-delay: var(--d, 0s);
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+    }
+
+    .game-shell {
+      position: relative;
+      z-index: 1;
+      width: min(1120px, calc(100vw - 24px));
+      height: 100vh;
+      height: 100dvh;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 12px;
+      padding-top: calc(12px + env(safe-area-inset-top));
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      overflow: hidden;
+    }
+
+    .hud,
+    .controls,
+    .board-frame,
+    .modal-card,
+    .menu-card {
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      background: var(--panel);
+      box-shadow: var(--soft-shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr minmax(220px, 0.8fr) 1fr;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 22px;
+    }
+
+    .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .stat-row.right {
+      justify-content: flex-end;
+    }
+
+    .stat {
+      min-width: 82px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.55);
+    }
+
+    .stat-label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.1;
+    }
+
+    .stat-value {
+      display: block;
+      margin-top: 2px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 0;
+      color: var(--ink);
+    }
+
+    .timer {
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .timer-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .time-text {
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .progress {
+      height: 12px;
+      padding: 2px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.55);
+    }
+
+    .progress-fill {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #6ff0c8, #ffd166, #ff8fb6);
+      transition: width 220ms ease;
+    }
+
+    .board-stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .board-frame {
+      position: relative;
+      width: auto;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: var(--cols) / var(--rows);
+      padding: 10px;
+      border-radius: 26px;
+      overflow: hidden;
+    }
+
+    .board {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+      grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
+      gap: var(--tile-gap);
+      position: relative;
+    }
+
+    .tile {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      min-height: 0;
+      border: 2px solid rgba(255, 255, 255, 0.95);
+      border-radius: var(--radius);
+      background: linear-gradient(160deg, #ffffff, #ffe7f2 78%, #ffe0c9);
+      box-shadow: 0 6px 12px rgba(255, 150, 190, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      cursor: pointer;
+      user-select: none;
+      isolation: isolate;
+      transition: transform 140ms ease, opacity 260ms ease, border-color 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+    }
+
+    .tile::after {
+      content: "";
+      position: absolute;
+      inset: 3px 4px auto 4px;
+      height: 34%;
+      border-radius: calc(var(--radius) - 4px);
+      background: rgba(255, 255, 255, 0.6);
+      pointer-events: none;
+    }
+
+    .tile:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.04);
+    }
+
+    .tile.empty {
+      opacity: 0;
+      pointer-events: none;
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .tile.selected {
+      border-color: var(--mint);
+      box-shadow: 0 0 0 3px rgba(47, 207, 174, 0.4), 0 0 22px rgba(47, 207, 174, 0.6);
+      transform: scale(1.1);
+      z-index: 3;
+    }
+
+    .tile.hint {
+      border-color: var(--sun);
+      box-shadow: 0 0 0 3px rgba(255, 206, 77, 0.45), 0 0 22px rgba(255, 206, 77, 0.6);
+      animation: hintPulse 700ms ease-in-out 3;
+      z-index: 2;
+    }
+
+    .tile.removing {
+      opacity: 0;
+      transform: scale(0.18) rotate(10deg);
+      pointer-events: none;
+    }
+
+    .tile.removing .tile-face {
+      transform: scale(0.18) rotate(-18deg);
+      opacity: 0;
+    }
+
+    .tile-face {
+      display: grid;
+      place-items: center;
+      width: 100%;
+      height: 100%;
+      font-size: var(--tile-font);
+      line-height: 1;
+      transform-origin: center;
+      transition: transform 260ms ease, opacity 260ms ease;
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.18));
+      z-index: 1;
+    }
+
+    .line-layer {
+      position: absolute;
+      inset: 10px;
+      width: calc(100% - 20px);
+      height: calc(100% - 20px);
+      overflow: visible;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .link-line {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 6px rgba(255, 126, 179, 0.9));
+      animation: lineFade 400ms ease forwards;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px;
+      border-radius: 22px;
+    }
+
+    .ctrl {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 100px;
+      height: 44px;
+      padding: 0 16px;
+      border: 2px solid rgba(255, 255, 255, 0.95);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff, #ffe3ef);
+      box-shadow: 0 8px 16px rgba(255, 150, 190, 0.28);
+      color: var(--ink);
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 120ms ease, filter 140ms ease, box-shadow 140ms ease;
+    }
+
+    .ctrl:hover {
+      transform: translateY(-2px) scale(1.02);
+      filter: brightness(1.03);
+      box-shadow: 0 12px 22px rgba(255, 150, 190, 0.34);
+    }
+
+    .ctrl:active {
+      transform: translateY(0) scale(0.97);
+    }
+
+    .ctrl.primary {
+      background: linear-gradient(180deg, #ff9ec6, #ff7eb3);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.9);
+    }
+
+    .ctrl.accent {
+      background: linear-gradient(180deg, #8be7ff, #66c6ff);
+      color: #fff;
+    }
+
+    .ctrl:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+      transform: none;
+    }
+
+    .badge {
+      min-width: 22px;
+      height: 22px;
+      padding: 0 6px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--pink);
+      color: #fff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    /* combo window */
+    .combo-window {
+      position: fixed;
+      top: calc(12px + env(safe-area-inset-top) + 92px);
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 233, 244, 0.92));
+      box-shadow: 0 12px 26px rgba(255, 130, 175, 0.35);
+      z-index: 45;
+      pointer-events: none;
+    }
+
+    .combo-window.show {
+      display: flex;
+      animation: comboPop 220ms ease;
+    }
+
+    .combo-window .cw-label {
+      font-weight: 900;
+      font-size: 14px;
+      color: #ff5fa2;
+      white-space: nowrap;
+    }
+
+    .combo-window .cw-bar {
+      width: 120px;
+      height: 9px;
+      border-radius: 999px;
+      background: rgba(255, 170, 205, 0.35);
+      overflow: hidden;
+    }
+
+    .combo-window .cw-fill {
+      height: 100%;
+      width: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ff7eb3, #ffce4d);
+      transform-origin: left center;
+    }
+
+    .toast,
+    .rating {
+      position: fixed;
+      left: 50%;
+      pointer-events: none;
+      z-index: 50;
+      text-align: center;
+    }
+
+    .toast {
+      bottom: calc(88px + env(safe-area-inset-bottom));
+      max-width: min(420px, calc(100vw - 36px));
+      padding: 10px 16px;
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--ink);
+      font-weight: 700;
+      box-shadow: 0 14px 30px rgba(255, 145, 185, 0.32);
+      transform: translate(-50%, 12px);
+      opacity: 0;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .rating {
+      top: 44%;
+      font-size: clamp(30px, 8vw, 76px);
+      font-weight: 1000;
+      letter-spacing: 1px;
+      color: #fff;
+      text-shadow:
+        0 0 0 #fff,
+        2px 2px 0 #ff7eb3,
+        -2px -2px 0 #ffce4d,
+        0 0 24px rgba(255, 159, 104, 0.8);
+      opacity: 0;
+    }
+
+    .rating.show {
+      animation: ratingPop 820ms ease forwards;
+    }
+
+    .rating::before,
+    .rating::after {
+      content: "✦";
+      position: absolute;
+      top: 50%;
+      color: #66e0ff;
+      font-size: 0.5em;
+      text-shadow: 0 0 12px rgba(102, 224, 255, 0.9);
+    }
+
+    .rating::before { left: -0.85em; }
+    .rating::after { right: -0.85em; }
+
+    .modal,
+    .menu {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(120, 95, 140, 0.32);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+      z-index: 60;
+      backdrop-filter: blur(6px);
+    }
+
+    .modal.open,
+    .menu.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card,
+    .menu-card {
+      width: min(480px, 100%);
+      max-height: min(92vh, 780px);
+      overflow: auto;
+      padding: 24px;
+      border-radius: 28px;
+      text-align: center;
+      background: var(--panel-strong);
+    }
+
+    .menu-card {
+      width: min(580px, 100%);
+    }
+
+    .modal-title,
+    .menu-title {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 6vw, 50px);
+      font-weight: 1000;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, #ff7eb3, #ff9f68, #ffd24d);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 3px 0 rgba(255, 140, 180, 0.32));
+    }
+
+    .menu-title {
+      animation: titleBounce 2.6s ease-in-out infinite;
+    }
+
+    .modal-text,
+    .menu-text {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .modal-actions,
+    .menu-actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .menu-sub {
+      margin: 18px 0 8px;
+      font-weight: 900;
+      color: #ff6fa6;
+      font-size: 15px;
+    }
+
+    .level-scroll {
+      max-height: 38vh;
+      overflow: auto;
+      padding: 4px;
+      margin: 4px 0 6px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    .level-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .level-btn {
+      min-width: 0;
+      height: 40px;
+      padding: 0;
+      font-size: 13px;
+    }
+
+    .level-btn.reached {
+      background: linear-gradient(180deg, #c9f5e6, #9fe9d2);
+    }
+
+    .level-btn.current {
+      background: linear-gradient(180deg, #ff9ec6, #ff7eb3);
+      color: #fff;
+    }
+
+    .rules {
+      margin: 16px 0 0;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.5);
+      color: var(--muted);
+      text-align: left;
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    @keyframes floaty {
+      0% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-20px) rotate(10deg); }
+      100% { transform: translateY(0) rotate(0deg); }
+    }
+
+    @keyframes lineFade {
+      0% { opacity: 0; stroke-dasharray: 0 1000; }
+      25% { opacity: 1; }
+      72% { opacity: 1; stroke-dasharray: 1000 0; }
+      100% { opacity: 0; stroke-dasharray: 1000 0; }
+    }
+
+    @keyframes hintPulse {
+      50% { transform: scale(1.1); filter: brightness(1.12); }
+    }
+
+    @keyframes ratingPop {
+      0% { opacity: 0; transform: translate(-50%, 18px) scale(0.45) rotate(-7deg); }
+      22% { opacity: 1; transform: translate(-50%, -10px) scale(1.18) rotate(4deg); }
+      52% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -46px) scale(0.92); }
+    }
+
+    @keyframes comboPop {
+      0% { transform: translateX(-50%) scale(0.7); opacity: 0; }
+      100% { transform: translateX(-50%) scale(1); opacity: 1; }
+    }
+
+    @keyframes titleBounce {
+      0%, 100% { transform: translateY(0) rotate(-1deg); }
+      50% { transform: translateY(-6px) rotate(1deg); }
+    }
+
+    @media (max-width: 760px) {
+      :root {
+        --tile-gap: 4px;
+        --radius: 11px;
+        --tile-font: 20px;
+      }
+
+      .decor span:nth-child(n+5) { display: none; }
+
+      .game-shell {
+        width: calc(100vw - 16px);
+        gap: 10px;
+      }
+
+      .hud {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px;
+      }
+
+      .stat-row,
+      .stat-row.right {
+        justify-content: center;
+      }
+
+      .stat {
+        min-width: 76px;
+        padding: 6px 8px;
+      }
+
+      .stat-value,
+      .time-text {
+        font-size: 16px;
+      }
+
+      .combo-window {
+        top: auto;
+        bottom: calc(80px + env(safe-area-inset-bottom));
+      }
+
+      .board-frame {
+        padding: 7px;
+        border-radius: 20px;
+      }
+
+      .line-layer {
+        inset: 7px;
+        width: calc(100% - 14px);
+        height: calc(100% - 14px);
+      }
+
+      .link-line { stroke-width: 6; }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .ctrl {
+        width: 100%;
+        min-width: 0;
+        height: 42px;
+        padding: 0 8px;
+      }
+
+      .level-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 420px) {
+      .controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .level-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="decor" aria-hidden="true">
+    <span style="--x:6%;--y:14%;--s:36px;--d:0s">🍓</span>
+    <span style="--x:88%;--y:18%;--s:40px;--d:1.2s">🍭</span>
+    <span style="--x:16%;--y:74%;--s:34px;--d:2.1s">🍬</span>
+    <span style="--x:80%;--y:70%;--s:38px;--d:0.6s">🧁</span>
+    <span style="--x:46%;--y:8%;--s:30px;--d:1.6s">⭐</span>
+    <span style="--x:30%;--y:40%;--s:28px;--d:2.6s">🍉</span>
+    <span style="--x:66%;--y:44%;--s:30px;--d:0.9s">🍇</span>
+    <span style="--x:92%;--y:48%;--s:26px;--d:1.9s">🌈</span>
+  </div>
+
+  <main class="game-shell">
+    <section class="hud" aria-label="游戏信息">
+      <div class="stat-row">
+        <div class="stat">
+          <span class="stat-label" id="levelLabel">关卡</span>
+          <span class="stat-value" id="levelText">01</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">分数</span>
+          <span class="stat-value" id="scoreText">000000</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">最高分</span>
+          <span class="stat-value" id="bestText">000000</span>
+        </div>
+      </div>
+
+      <div class="timer">
+        <div class="timer-top">
+          <span>倒计时</span>
+          <span class="time-text" id="timeText">05:00</span>
+        </div>
+        <div class="progress" aria-hidden="true">
+          <div class="progress-fill" id="timeFill"></div>
+        </div>
+      </div>
+
+      <div class="stat-row right">
+        <div class="stat">
+          <span class="stat-label">连击</span>
+          <span class="stat-value" id="comboText">x0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">剩余</span>
+          <span class="stat-value" id="leftText">000</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="board-stage" id="boardStage" aria-label="棋盘">
+      <div class="board-frame" id="boardFrame">
+        <div class="board" id="board"></div>
+        <svg class="line-layer" id="lineLayer"></svg>
+      </div>
+    </section>
+
+    <section class="controls" aria-label="操作">
+      <button class="ctrl" id="hintBtn" type="button" title="提示">
+        <span aria-hidden="true">💡</span><span>提示</span><span class="badge" id="hintBadge">5</span>
+      </button>
+      <button class="ctrl" id="shuffleBtn" type="button" title="洗牌">
+        <span aria-hidden="true">🔀</span><span>洗牌</span><span class="badge" id="shuffleBadge">3</span>
+      </button>
+      <button class="ctrl" id="restartBtn" type="button" title="重开">
+        <span aria-hidden="true">🔁</span><span>重开</span>
+      </button>
+      <button class="ctrl" id="pauseBtn" type="button" title="暂停">
+        <span aria-hidden="true" id="pauseIcon">⏸</span><span id="pauseText">暂停</span>
+      </button>
+      <button class="ctrl" id="muteBtn" type="button" title="音乐">
+        <span aria-hidden="true" id="muteIcon">🔇</span><span id="muteText">音乐</span>
+      </button>
+    </section>
+  </main>
+
+  <div class="combo-window" id="comboWindow" aria-hidden="true">
+    <span class="cw-label" id="comboLabel">GOOD x1</span>
+    <span class="cw-bar"><i class="cw-fill" id="comboFill"></i></span>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="rating" id="rating" aria-hidden="true"></div>
+
+  <div class="menu open" id="menu" aria-hidden="false">
+    <div class="menu-card" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+      <h1 class="menu-title" id="menuTitle">🍬 豆豆 连连看 🍬</h1>
+      <p class="menu-text" id="menuText">可爱水果派对开场～找到相同图案，用不超过两次拐弯的路径连起来吧！</p>
+      <div class="menu-actions" id="menuActions"></div>
+      <div class="menu-sub">选择关卡（共 100 关）</div>
+      <div class="level-scroll">
+        <div class="level-grid" id="levelGrid"></div>
+      </div>
+      <div class="rules">
+        规则：点击两个相同方块即可尝试连接。<br>
+        ✨ 连击窗口：每次消除后 <b>2 秒</b> 内必须再消除一组，连击与评级才会升级，否则连击清零、评级重头开始。<br>
+        🌈 无尽模式：每关限时 120 秒，每消除一组 +5 秒，过关后时间重置为 120 秒，道具跨关保留，挑战你能到第几关！
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h1 class="modal-title" id="modalTitle">暂停</h1>
+      <p class="modal-text" id="modalText">当前进度已保留。</p>
+      <div class="modal-actions" id="modalActions"></div>
+    </div>
+  </div>
+
+  <script>
+    // === CONFIG ===
+    const CONFIG = { hintCount: 5, shuffleCount: 3 };
+    const ENDLESS_TIME = 120;
+    const ENDLESS_BONUS = 5;
+    const COMBO_WINDOW_MS = 2000;
+    const MAX_LEVEL = 100;
+    const SAVE_KEY = "qq-lianliankan-save-v3";
+    const BEST_KEY = "qq-lianliankan-best-v3";
+    const LEVEL_KEY = "qq-lianliankan-maxlevel-v3";
+    const ICONS = ["🍒","🍋","🍇","🍉","🍓","🥝","🍑","🍍","🥥","🥑","🍄","🌰","🍪","🍩","🍭","🍬","🧁","🍿","⭐","🌙","☀️","⚡","🔥","💧","🎲","🎯","🎹","🎧","🚀","💎","🔔","🌈"];
+    const RATING_LABELS = ["GOOD", "GREAT", "EXCELLENT", "PERFECT", "AMAZING", "LEGENDARY"];
+
+    // === STATE ===
+    const state = {
+      mode: "normal",
+      level: 1,
+      rows: 10,
+      cols: 14,
+      tileTypes: 18,
+      timeLimit: 300,
+      fullRows: 12,
+      fullCols: 16,
+      grid: [],
+      selected: null,
+      score: 0,
+      best: readBest(),
+      maxLevel: readMaxLevel(),
+      combo: 0,
+      hints: CONFIG.hintCount,
+      shuffles: CONFIG.shuffleCount,
+      remaining: 0,
+      timeLeft: 300,
+      timerId: null,
+      locked: false,
+      paused: true,
+      ended: false,
+      inGame: false,
+      bgmOn: false,
+      hintPair: null,
+      toastTimer: null,
+      ratingTimer: null,
+      comboTimer: null
+    };
+
+    const els = {
+      root: document.documentElement,
+      boardStage: document.getElementById("boardStage"),
+      boardFrame: document.getElementById("boardFrame"),
+      board: document.getElementById("board"),
+      lineLayer: document.getElementById("lineLayer"),
+      levelLabel: document.getElementById("levelLabel"),
+      levelText: document.getElementById("levelText"),
+      scoreText: document.getElementById("scoreText"),
+      bestText: document.getElementById("bestText"),
+      comboText: document.getElementById("comboText"),
+      leftText: document.getElementById("leftText"),
+      timeText: document.getElementById("timeText"),
+      timeFill: document.getElementById("timeFill"),
+      hintBtn: document.getElementById("hintBtn"),
+      shuffleBtn: document.getElementById("shuffleBtn"),
+      restartBtn: document.getElementById("restartBtn"),
+      pauseBtn: document.getElementById("pauseBtn"),
+      muteBtn: document.getElementById("muteBtn"),
+      pauseIcon: document.getElementById("pauseIcon"),
+      pauseText: document.getElementById("pauseText"),
+      muteIcon: document.getElementById("muteIcon"),
+      muteText: document.getElementById("muteText"),
+      hintBadge: document.getElementById("hintBadge"),
+      shuffleBadge: document.getElementById("shuffleBadge"),
+      comboWindow: document.getElementById("comboWindow"),
+      comboLabel: document.getElementById("comboLabel"),
+      comboFill: document.getElementById("comboFill"),
+      toast: document.getElementById("toast"),
+      rating: document.getElementById("rating"),
+      menu: document.getElementById("menu"),
+      menuActions: document.getElementById("menuActions"),
+      levelGrid: document.getElementById("levelGrid"),
+      modal: document.getElementById("modal"),
+      modalTitle: document.getElementById("modalTitle"),
+      modalText: document.getElementById("modalText"),
+      modalActions: document.getElementById("modalActions")
+    };
+
+    // === WECHAT MINI-PROGRAM BRIDGE ===
+    function isInMini() {
+      try {
+        // __wxjs_environment 只有在真正的小程序 web-view 环境才会被微信置为 "miniprogram"。
+        // 注意：jweixin 脚本会在任意页面定义 wx.miniProgram，故不能用它来判断环境。
+        if (window.__wxjs_environment === "miniprogram") return true;
+        const ua = (navigator.userAgent || "").toLowerCase();
+        return ua.indexOf("miniprogram") !== -1;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function wxPost(data) {
+      try {
+        if (isInMini() && typeof wx !== "undefined" && wx.miniProgram) {
+          wx.miniProgram.postMessage({ data });
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    function wxBack() {
+      try {
+        if (isInMini() && typeof wx !== "undefined" && wx.miniProgram) {
+          wx.miniProgram.navigateBack();
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    // === LEVEL CONFIG (procedural 1-100) ===
+    function isMobileLayout() {
+      return window.matchMedia("(max-width: 760px)").matches;
+    }
+
+    function levelConfig(level) {
+      const mobile = isMobileLayout();
+      const step = Math.max(0, level - 1);
+      let rows, cols;
+      if (mobile) {
+        rows = Math.min(12, 8 + Math.floor(step / 9));
+        cols = Math.min(10, 8 + Math.floor(step / 7));
+      } else {
+        rows = Math.min(14, 10 + Math.floor(step / 12));
+        cols = Math.min(20, 14 + Math.floor(step / 6));
+      }
+      if ((rows * cols) % 2 !== 0) cols = Math.max(2, cols - 1);
+      const tileTypes = Math.min(ICONS.length, 8 + Math.floor(step / 2));
+      const timeLimit = Math.max(150, 300 - step * 3);
+      return { rows, cols, tileTypes, timeLimit };
+    }
+
+    function createCell(row, col, type = 0) {
+      return { type, row, col, el: null };
+    }
+
+    function resetGrid() {
+      state.grid = Array.from({ length: state.fullRows }, (_, row) =>
+        Array.from({ length: state.fullCols }, (_, col) => createCell(row, col, 0))
+      );
+    }
+
+    function generateTypeBag() {
+      const total = state.rows * state.cols;
+      const bag = [];
+      for (let i = 0; i < total / 2; i++) {
+        const type = (i % state.tileTypes) + 1;
+        bag.push(type, type);
+      }
+      return shuffleArray(bag);
+    }
+
+    function buildBoard() {
+      resetGrid();
+      let bag = generateTypeBag();
+      let guard = 0;
+      let ready = false;
+      while (!ready && guard < 500) {
+        bag = shuffleArray(bag);
+        let index = 0;
+        for (let row = 1; row <= state.rows; row++) {
+          for (let col = 1; col <= state.cols; col++) {
+            state.grid[row][col].type = bag[index++];
+          }
+        }
+        ready = hasMoves();
+        guard++;
+      }
+      if (!ready) arrangeGuaranteedMove(getOccupiedCells(), bag);
+      state.remaining = state.rows * state.cols;
+    }
+
+    function shuffleArray(items) {
+      const arr = items.slice();
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function shuffleRemaining(silent = false) {
+      if (state.remaining <= 2) return hasMoves();
+      const occupied = getOccupiedCells();
+      let types = occupied.map(cell => cell.type);
+      let guard = 0;
+      do {
+        types = shuffleArray(types);
+        occupied.forEach((cell, index) => {
+          cell.type = types[index];
+        });
+        guard++;
+      } while (!hasMoves() && guard < 800);
+      if (!hasMoves()) arrangeGuaranteedMove(occupied, types);
+      renderBoard();
+      clearSelection();
+      clearHints();
+      saveProgress();
+      if (!silent) showToast("棋盘已重新洗牌");
+      return hasMoves();
+    }
+
+    function getOccupiedCells() {
+      const cells = [];
+      for (let row = 1; row <= state.rows; row++) {
+        for (let col = 1; col <= state.cols; col++) {
+          const cell = state.grid[row][col];
+          if (cell.type !== 0) cells.push(cell);
+        }
+      }
+      return cells;
+    }
+
+    function arrangeGuaranteedMove(cells, types) {
+      const counts = new Map();
+      types.forEach(type => counts.set(type, (counts.get(type) || 0) + 1));
+      const pairType = [...counts.entries()].find(([, count]) => count >= 2)?.[0];
+      if (!pairType) return false;
+
+      for (let i = 0; i < cells.length - 1; i++) {
+        for (let j = i + 1; j < cells.length; j++) {
+          const a = cells[i];
+          const b = cells[j];
+          const oldA = a.type;
+          const oldB = b.type;
+          a.type = pairType;
+          b.type = pairType;
+          const canConnect = Boolean(findPath(a, b));
+          a.type = oldA;
+          b.type = oldB;
+          if (canConnect) {
+            const rest = shuffleArray(types.slice());
+            rest.splice(rest.indexOf(pairType), 1);
+            rest.splice(rest.indexOf(pairType), 1);
+            cells.forEach(cell => {
+              cell.type = cell === a || cell === b ? pairType : rest.pop();
+            });
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // === PATHFINDING ===
+    function findPath(a, b) {
+      if (!a || !b || a === b || a.type === 0 || b.type === 0 || a.type !== b.type) return null;
+      const direct = straightPath(a, b);
+      if (direct) return direct;
+      const oneTurn = oneTurnPath(a, b);
+      if (oneTurn) return oneTurn;
+      return twoTurnPath(a, b);
+    }
+
+    function straightPath(a, b) {
+      if (a.row !== b.row && a.col !== b.col) return null;
+      return isClearLine(a, b) ? [point(a), point(b)] : null;
+    }
+
+    function oneTurnPath(a, b) {
+      const corners = [
+        { row: a.row, col: b.col },
+        { row: b.row, col: a.col }
+      ];
+      for (const corner of corners) {
+        if (!isInside(corner) || !isEmpty(corner)) continue;
+        if (isClearLine(a, corner) && isClearLine(corner, b)) {
+          return [point(a), point(corner), point(b)];
+        }
+      }
+      return null;
+    }
+
+    function zeroOrOneTurnPath(a, b) {
+      return straightPath(a, b) || oneTurnPath(a, b);
+    }
+
+    function twoTurnPath(a, b) {
+      const dirs = [
+        { dr: -1, dc: 0 },
+        { dr: 1, dc: 0 },
+        { dr: 0, dc: -1 },
+        { dr: 0, dc: 1 }
+      ];
+      for (const dir of dirs) {
+        let row = a.row + dir.dr;
+        let col = a.col + dir.dc;
+        while (isInside({ row, col }) && state.grid[row][col].type === 0) {
+          const pivot = { row, col };
+          const tail = zeroOrOneTurnPath(pivot, b);
+          if (tail) return [point(a), ...tail];
+          row += dir.dr;
+          col += dir.dc;
+        }
+      }
+      return null;
+    }
+
+    function isClearLine(a, b) {
+      if (a.row === b.row) {
+        const start = Math.min(a.col, b.col) + 1;
+        const end = Math.max(a.col, b.col);
+        for (let col = start; col < end; col++) {
+          if (state.grid[a.row][col].type !== 0) return false;
+        }
+        return true;
+      }
+      if (a.col === b.col) {
+        const start = Math.min(a.row, b.row) + 1;
+        const end = Math.max(a.row, b.row);
+        for (let row = start; row < end; row++) {
+          if (state.grid[row][a.col].type !== 0) return false;
+        }
+        return true;
+      }
+      return false;
+    }
+
+    function isInside(p) {
+      return p.row >= 0 && p.row < state.fullRows && p.col >= 0 && p.col < state.fullCols;
+    }
+
+    function isEmpty(p) {
+      return state.grid[p.row][p.col].type === 0;
+    }
+
+    function point(cell) {
+      return { row: cell.row, col: cell.col };
+    }
+
+    function hasMoves() {
+      return Boolean(findFirstMove());
+    }
+
+    function findFirstMove() {
+      const groups = new Map();
+      for (const cell of getOccupiedCells()) {
+        if (!groups.has(cell.type)) groups.set(cell.type, []);
+        groups.get(cell.type).push(cell);
+      }
+      for (const cells of groups.values()) {
+        for (let i = 0; i < cells.length - 1; i++) {
+          for (let j = i + 1; j < cells.length; j++) {
+            const path = findPath(cells[i], cells[j]);
+            if (path) return { a: cells[i], b: cells[j], path };
+          }
+        }
+      }
+      return null;
+    }
+
+    // === RENDER ===
+    function renderBoard() {
+      els.root.style.setProperty("--rows", state.rows);
+      els.root.style.setProperty("--cols", state.cols);
+      els.root.style.setProperty("--tile-font", `clamp(15px, ${Math.max(15, 230 / state.cols)}px, 30px)`);
+      els.board.innerHTML = "";
+
+      for (let row = 1; row <= state.rows; row++) {
+        for (let col = 1; col <= state.cols; col++) {
+          const cell = state.grid[row][col];
+          const tile = document.createElement("button");
+          tile.className = cell.type === 0 ? "tile empty" : "tile";
+          tile.type = "button";
+          tile.dataset.row = row;
+          tile.dataset.col = col;
+          tile.setAttribute("aria-label", cell.type ? `图案 ${cell.type}` : "空格");
+          tile.disabled = cell.type === 0;
+
+          if (cell.type !== 0) {
+            const face = document.createElement("span");
+            face.className = "tile-face";
+            face.textContent = ICONS[(cell.type - 1) % ICONS.length];
+            tile.appendChild(face);
+          }
+
+          if (state.selected === cell) tile.classList.add("selected");
+          cell.el = tile;
+          els.board.appendChild(tile);
+        }
+      }
+      fitBoard();
+      updateHud();
+    }
+
+    function fitBoard() {
+      const rect = els.boardStage.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const ratio = state.cols / state.rows;
+      let width = rect.width;
+      let height = width / ratio;
+      if (height > rect.height) {
+        height = rect.height;
+        width = height * ratio;
+      }
+      els.boardFrame.style.width = `${Math.floor(width)}px`;
+      els.boardFrame.style.height = `${Math.floor(height)}px`;
+      els.lineLayer.innerHTML = "";
+    }
+
+    function updateHud() {
+      state.best = Math.max(state.best, state.score);
+      writeBest(state.best);
+      els.levelLabel.textContent = state.mode === "endless" ? "无尽" : "关卡";
+      els.levelText.textContent = state.mode === "endless"
+        ? `∞${state.level}`
+        : String(state.level).padStart(2, "0");
+      els.scoreText.textContent = String(state.score).padStart(6, "0");
+      els.bestText.textContent = String(state.best).padStart(6, "0");
+      els.comboText.textContent = `x${state.combo}`;
+      els.leftText.textContent = String(state.remaining).padStart(3, "0");
+      els.hintBadge.textContent = state.hints;
+      els.shuffleBadge.textContent = state.shuffles;
+      els.hintBtn.disabled = state.hints <= 0 || state.locked || state.paused || state.ended || !state.inGame;
+      els.shuffleBtn.disabled = state.shuffles <= 0 || state.locked || state.paused || state.ended || !state.inGame;
+      els.pauseBtn.disabled = state.ended || !state.inGame;
+      els.restartBtn.disabled = !state.inGame;
+      els.pauseIcon.textContent = state.paused ? "▶" : "⏸";
+      els.pauseText.textContent = state.paused ? "继续" : "暂停";
+      els.muteIcon.textContent = state.bgmOn ? "🔊" : "🔇";
+      els.muteText.textContent = state.bgmOn ? "音乐开" : "音乐";
+      updateTimerUi();
+    }
+
+    function updateTimerUi() {
+      const minutes = Math.floor(Math.max(0, state.timeLeft) / 60);
+      const seconds = Math.max(0, state.timeLeft) % 60;
+      const ratio = Math.max(0, Math.min(1, state.timeLeft / state.timeLimit));
+      els.timeText.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      els.timeFill.style.width = `${ratio * 100}%`;
+      els.timeFill.style.filter = ratio < 0.18 ? "hue-rotate(-20deg) saturate(1.5)" : "";
+    }
+
+    function drawPath(path) {
+      const points = path.map(pathPointToSvgPoint);
+      const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      polyline.setAttribute("class", "link-line");
+      polyline.setAttribute("points", points.map(p => `${p.x},${p.y}`).join(" "));
+      els.lineLayer.innerHTML = "";
+      els.lineLayer.appendChild(polyline);
+      setTimeout(() => {
+        if (polyline.parentNode) polyline.remove();
+      }, 420);
+    }
+
+    function pathPointToSvgPoint(p) {
+      const boardRect = els.board.getBoundingClientRect();
+      const width = els.lineLayer.clientWidth;
+      const height = els.lineLayer.clientHeight;
+      if (p.row >= 1 && p.row <= state.rows && p.col >= 1 && p.col <= state.cols) {
+        const tile = state.grid[p.row][p.col].el;
+        const rect = tile.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2 - boardRect.left,
+          y: rect.top + rect.height / 2 - boardRect.top
+        };
+      }
+      return {
+        x: ((p.col - 0.5) / state.cols) * width,
+        y: ((p.row - 0.5) / state.rows) * height
+      };
+    }
+
+    function showToast(message) {
+      clearTimeout(state.toastTimer);
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      state.toastTimer = setTimeout(() => els.toast.classList.remove("show"), 1600);
+    }
+
+    function ratingLabel(combo) {
+      return RATING_LABELS[Math.min(combo - 1, RATING_LABELS.length - 1)];
+    }
+
+    function showRating(combo) {
+      clearTimeout(state.ratingTimer);
+      els.rating.textContent = ratingLabel(combo);
+      els.rating.classList.remove("show");
+      void els.rating.offsetWidth;
+      els.rating.classList.add("show");
+      state.ratingTimer = setTimeout(() => els.rating.classList.remove("show"), 820);
+    }
+
+    // === COMBO WINDOW (2s chain) ===
+    function startComboWindow() {
+      clearTimeout(state.comboTimer);
+      els.comboLabel.textContent = `${ratingLabel(state.combo)} x${state.combo}`;
+      els.comboWindow.classList.add("show");
+      const fill = els.comboFill;
+      fill.style.transition = "none";
+      fill.style.width = "100%";
+      void fill.offsetWidth;
+      fill.style.transition = `width ${COMBO_WINDOW_MS}ms linear`;
+      fill.style.width = "0%";
+      state.comboTimer = setTimeout(() => {
+        state.combo = 0;
+        hideComboWindow();
+        updateHud();
+        saveProgress();
+      }, COMBO_WINDOW_MS);
+    }
+
+    function hideComboWindow() {
+      clearTimeout(state.comboTimer);
+      state.comboTimer = null;
+      els.comboWindow.classList.remove("show");
+    }
+
+    function breakCombo() {
+      state.combo = 0;
+      hideComboWindow();
+    }
+
+    function showModal(title, text, actions) {
+      els.modalTitle.textContent = title;
+      els.modalText.innerHTML = text;
+      els.modalActions.innerHTML = "";
+      actions.forEach(action => {
+        const btn = document.createElement("button");
+        btn.className = "ctrl" + (action.primary ? " primary" : "");
+        btn.type = "button";
+        btn.textContent = action.label;
+        btn.addEventListener("click", action.onClick);
+        els.modalActions.appendChild(btn);
+      });
+      els.modal.classList.add("open");
+      els.modal.setAttribute("aria-hidden", "false");
+    }
+
+    function hideModal() {
+      els.modal.classList.remove("open");
+      els.modal.setAttribute("aria-hidden", "true");
+    }
+
+    function showMenu(hasSave) {
+      state.paused = true;
+      hideComboWindow();
+      stopBgm();
+      updateHud();
+      els.menuActions.innerHTML = "";
+      if (hasSave) {
+        addMenuButton("继续游戏", () => { hideMenu(); resumeGame(); }, true);
+      }
+      addMenuButton("开始游戏", () => startLevel(1, { mode: "normal", resetScore: true }), !hasSave);
+      addMenuButton("🌈 无尽模式", () => startLevel(1, { mode: "endless", resetScore: true }));
+      addMenuButton("清除存档", () => {
+        localStorage.removeItem(SAVE_KEY);
+        showToast("存档已清除");
+        showMenu(false);
+      });
+      if (isInMini()) {
+        addMenuButton("返回小程序", () => wxBack());
+      }
+      renderLevelButtons();
+      els.menu.classList.add("open");
+      els.menu.setAttribute("aria-hidden", "false");
+    }
+
+    function hideMenu() {
+      els.menu.classList.remove("open");
+      els.menu.setAttribute("aria-hidden", "true");
+    }
+
+    function addMenuButton(label, onClick, primary) {
+      const btn = document.createElement("button");
+      btn.className = "ctrl" + (primary ? " primary" : "");
+      btn.type = "button";
+      btn.textContent = label;
+      btn.addEventListener("click", onClick);
+      els.menuActions.appendChild(btn);
+    }
+
+    function renderLevelButtons() {
+      els.levelGrid.innerHTML = "";
+      for (let level = 1; level <= MAX_LEVEL; level++) {
+        const btn = document.createElement("button");
+        let cls = "ctrl level-btn";
+        if (level === state.level && state.mode === "normal" && state.inGame) cls += " current";
+        else if (level <= state.maxLevel) cls += " reached";
+        btn.className = cls;
+        btn.type = "button";
+        btn.textContent = level;
+        btn.addEventListener("click", () => startLevel(level, { mode: "normal", resetScore: true }));
+        els.levelGrid.appendChild(btn);
+      }
+    }
+
+    // === INPUT ===
+    els.board.addEventListener("click", event => {
+      const tile = event.target.closest(".tile");
+      if (!tile || tile.disabled) return;
+      const row = Number(tile.dataset.row);
+      const col = Number(tile.dataset.col);
+      handleTileClick(state.grid[row][col]);
+    });
+
+    els.hintBtn.addEventListener("click", useHint);
+    els.shuffleBtn.addEventListener("click", useShuffle);
+    els.restartBtn.addEventListener("click", confirmRestart);
+    els.pauseBtn.addEventListener("click", togglePause);
+    els.muteBtn.addEventListener("click", toggleBgm);
+
+    function handleTileClick(cell) {
+      if (state.locked || state.paused || state.ended || cell.type === 0) return;
+      clearHints();
+
+      if (state.selected === cell) {
+        clearSelection();
+        playSound("select");
+        return;
+      }
+
+      if (!state.selected) {
+        selectCell(cell);
+        playSound("select");
+        return;
+      }
+
+      const first = state.selected;
+      const path = findPath(first, cell);
+      if (path) {
+        removePair(first, cell, path);
+      } else {
+        first.el.classList.remove("selected");
+        breakCombo();
+        selectCell(cell);
+        playSound("fail");
+        vibrate(36);
+        updateHud();
+        saveProgress();
+      }
+    }
+
+    function selectCell(cell) {
+      clearSelection();
+      state.selected = cell;
+      cell.el.classList.add("selected");
+    }
+
+    function clearSelection() {
+      if (state.selected && state.selected.el) state.selected.el.classList.remove("selected");
+      state.selected = null;
+    }
+
+    function clearHints() {
+      if (!state.hintPair) return;
+      state.hintPair.forEach(cell => {
+        if (cell.el) cell.el.classList.remove("hint");
+      });
+      state.hintPair = null;
+    }
+
+    function useHint() {
+      if (state.hints <= 0 || state.locked || state.paused || state.ended) return;
+      const move = findFirstMove();
+      if (!move) {
+        showToast("没有可提示的组合，正在洗牌");
+        shuffleRemaining(true);
+        return;
+      }
+      clearSelection();
+      clearHints();
+      state.hints--;
+      state.hintPair = [move.a, move.b];
+      move.a.el.classList.add("hint");
+      move.b.el.classList.add("hint");
+      playSound("select");
+      updateHud();
+      saveProgress();
+      showToast("已标出一对可消除方块");
+    }
+
+    function useShuffle() {
+      if (state.shuffles <= 0 || state.locked || state.paused || state.ended) return;
+      state.shuffles--;
+      breakCombo();
+      playSound("select");
+      shuffleRemaining();
+      updateHud();
+      saveProgress();
+    }
+
+    function confirmRestart() {
+      if (!state.inGame) return;
+      state.paused = true;
+      hideComboWindow();
+      stopBgm();
+      updateHud();
+      const tip = state.mode === "endless"
+        ? "重开会清空当前无尽进度，从第 1 关重新开始。"
+        : "重开会清空当前累计分，并从本关重新开始。";
+      showModal("确认重开", tip, [
+        { label: "取消", onClick: () => { hideModal(); resumeGame(); } },
+        { label: "确认重开", primary: true, onClick: () => startLevel(state.mode === "endless" ? 1 : state.level, { mode: state.mode, resetScore: true }) }
+      ]);
+    }
+
+    function togglePause() {
+      if (state.ended || !state.inGame) return;
+      state.paused = !state.paused;
+      clearSelection();
+      clearHints();
+      if (state.paused) {
+        hideComboWindow();
+        stopBgm();
+        updateHud();
+        showModal("暂停", "当前进度已保留。", [
+          { label: "继续", primary: true, onClick: () => { hideModal(); resumeGame(); } },
+          { label: "回到菜单", onClick: () => { hideModal(); saveProgress(); showMenu(true); } }
+        ]);
+      } else {
+        hideModal();
+        if (state.combo > 0) startComboWindow();
+        if (state.bgmOn) startBgm();
+        updateHud();
+      }
+    }
+
+    function toggleBgm() {
+      state.bgmOn = !state.bgmOn;
+      if (state.bgmOn && state.inGame && !state.paused && !document.hidden) {
+        startBgm();
+      } else {
+        stopBgm();
+      }
+      updateHud();
+      saveProgress();
+    }
+
+    // === GAME LOOP ===
+    function applyLevelDims(level) {
+      const cfg = levelConfig(level);
+      state.rows = cfg.rows;
+      state.cols = cfg.cols;
+      state.tileTypes = cfg.tileTypes;
+      state.fullRows = cfg.rows + 2;
+      state.fullCols = cfg.cols + 2;
+      return cfg;
+    }
+
+    function startLevel(level = 1, options = {}) {
+      state.mode = options.mode || "normal";
+      const cfg = applyLevelDims(level);
+      state.level = level;
+      state.timeLimit = state.mode === "endless" ? ENDLESS_TIME : cfg.timeLimit;
+      state.timeLeft = state.timeLimit;
+      state.hints = CONFIG.hintCount;
+      state.shuffles = CONFIG.shuffleCount;
+      state.combo = 0;
+      state.selected = null;
+      state.locked = false;
+      state.paused = false;
+      state.ended = false;
+      state.inGame = true;
+      state.hintPair = null;
+      if (options.resetScore) state.score = 0;
+      if (state.mode === "normal") {
+        state.maxLevel = Math.max(state.maxLevel, level);
+        writeMaxLevel(state.maxLevel);
+      }
+      hideComboWindow();
+      hideModal();
+      hideMenu();
+      buildBoard();
+      renderBoard();
+      restartTimer();
+      if (state.bgmOn) startBgm();
+      saveProgress();
+    }
+
+    function advanceEndless() {
+      state.level++;
+      applyLevelDims(state.level);
+      state.timeLimit = ENDLESS_TIME;
+      state.timeLeft = ENDLESS_TIME;
+      // keep hints, shuffles, score, combo chain
+      state.selected = null;
+      state.locked = false;
+      state.maxLevel = Math.max(state.maxLevel, state.level);
+      buildBoard();
+      renderBoard();
+      updateHud();
+      saveProgress();
+      showToast(`🌈 进入无尽 第 ${state.level} 关`);
+    }
+
+    function resumeGame() {
+      state.paused = false;
+      state.ended = false;
+      state.inGame = true;
+      hideModal();
+      hideMenu();
+      renderBoard();
+      restartTimer();
+      if (state.combo > 0) startComboWindow();
+      if (state.bgmOn) startBgm();
+      updateHud();
+    }
+
+    function restartTimer() {
+      clearInterval(state.timerId);
+      state.timerId = setInterval(() => {
+        if (state.paused || state.ended || !state.inGame) return;
+        state.timeLeft--;
+        updateHud();
+        saveProgress();
+        if (state.timeLeft <= 0) endGame(false);
+      }, 1000);
+    }
+
+    function removePair(a, b, path) {
+      state.locked = true;
+      drawPath(path);
+      clearSelection();
+      a.el.classList.add("removing");
+      b.el.classList.add("removing");
+      playSound("clear");
+      vibrate(18);
+
+      setTimeout(() => {
+        a.type = 0;
+        b.type = 0;
+        state.remaining -= 2;
+        state.combo++;
+        state.score += 10 + Math.max(0, state.combo - 1) * 4;
+        if (state.mode === "endless") state.timeLeft += ENDLESS_BONUS;
+        showRating(state.combo);
+        startComboWindow();
+        state.locked = false;
+        renderBoard();
+
+        if (state.remaining === 0) {
+          if (state.mode === "endless") {
+            advanceEndless();
+            return;
+          }
+          endGame(true);
+          return;
+        }
+
+        if (!hasMoves()) {
+          showToast("没有可消除组合，已自动洗牌");
+          shuffleRemaining(true);
+        }
+        updateHud();
+        saveProgress();
+      }, 290);
+    }
+
+    function endGame(won) {
+      state.ended = true;
+      state.locked = true;
+      state.paused = true;
+      clearInterval(state.timerId);
+      clearSelection();
+      clearHints();
+      hideComboWindow();
+      stopBgm();
+      updateHud();
+      localStorage.removeItem(SAVE_KEY);
+      wxPost({ type: "gameOver", mode: state.mode, won, level: state.level, score: state.score, best: state.best });
+
+      const used = Math.max(0, state.timeLimit - state.timeLeft);
+      const minutes = Math.floor(used / 60);
+      const seconds = used % 60;
+
+      if (state.mode === "endless") {
+        const text = `坚持到 <b>第 ${state.level} 关</b><br>分数 <b>${state.score}</b><br>最高分 <b>${state.best}</b>`;
+        showModal("时间到", text, [
+          { label: "再战无尽", primary: true, onClick: () => startLevel(1, { mode: "endless", resetScore: true }) },
+          { label: "菜单", onClick: () => { hideModal(); showMenu(false); } }
+        ]);
+        return;
+      }
+
+      const text = `分数 <b>${state.score}</b><br>最高分 <b>${state.best}</b><br>用时 ${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      if (won) {
+        const actions = [];
+        if (state.level < MAX_LEVEL) {
+          actions.push({ label: "下一关", primary: true, onClick: () => startLevel(state.level + 1, { mode: "normal", resetScore: false }) });
+        }
+        actions.push({ label: "重玩本关", onClick: () => startLevel(state.level, { mode: "normal", resetScore: true }) });
+        actions.push({ label: "菜单", onClick: () => { hideModal(); showMenu(false); } });
+        showModal(state.level >= MAX_LEVEL ? "全部通关！" : "胜利", text, actions);
+      } else {
+        showModal("时间到", text, [
+          { label: "再来", primary: true, onClick: () => startLevel(state.level, { mode: "normal", resetScore: true }) },
+          { label: "菜单", onClick: () => { hideModal(); showMenu(false); } }
+        ]);
+      }
+    }
+
+    // === AUDIO ===
+    const audio = { ctx: null, bgmTimer: null, step: 0 };
+
+    function ensureAudio() {
+      try {
+        if (!audio.ctx) audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audio.ctx.state === "suspended") audio.ctx.resume();
+      } catch (e) { /* silent */ }
+    }
+
+    function playTone(freq, duration = 0.08, gain = 0.035, type = "sine") {
+      if (document.hidden) return;
+      ensureAudio();
+      if (!audio.ctx) return;
+      const now = audio.ctx.currentTime;
+      const osc = audio.ctx.createOscillator();
+      const amp = audio.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      amp.gain.setValueAtTime(0.0001, now);
+      amp.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+      amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      osc.connect(amp);
+      amp.connect(audio.ctx.destination);
+      osc.start(now);
+      osc.stop(now + duration + 0.02);
+    }
+
+    function playSound(type) {
+      if (type === "select") playTone(660, 0.055, 0.025, "triangle");
+      if (type === "fail") playTone(180, 0.09, 0.035, "sawtooth");
+      if (type === "clear") {
+        playTone(740, 0.08, 0.035, "triangle");
+        setTimeout(() => playTone(980, 0.09, 0.035, "triangle"), 70);
+      }
+    }
+
+    function startBgm() {
+      if (!state.bgmOn || state.paused || !state.inGame || document.hidden) return;
+      ensureAudio();
+      if (!audio.ctx || audio.bgmTimer) return;
+      const notes = [392, 523, 587, 659, 587, 523, 440, 523];
+      audio.bgmTimer = setInterval(() => {
+        const note = notes[audio.step % notes.length];
+        audio.step++;
+        playTone(note, 0.11, 0.018, "square");
+      }, 235);
+    }
+
+    function stopBgm() {
+      clearInterval(audio.bgmTimer);
+      audio.bgmTimer = null;
+    }
+
+    function vibrate(pattern) {
+      try {
+        if (navigator.vibrate) navigator.vibrate(pattern);
+        else if (isInMini()) wxPost({ type: "vibrate" });
+      } catch (e) { /* silent */ }
+    }
+
+    // === STORAGE ===
+    function readBest() {
+      return Number(localStorage.getItem(BEST_KEY) || 0);
+    }
+
+    function writeBest(value) {
+      localStorage.setItem(BEST_KEY, String(value));
+    }
+
+    function readMaxLevel() {
+      return Math.max(1, Number(localStorage.getItem(LEVEL_KEY) || 1));
+    }
+
+    function writeMaxLevel(value) {
+      localStorage.setItem(LEVEL_KEY, String(value));
+    }
+
+    function saveProgress() {
+      if (!state.inGame) return;
+      const data = {
+        mode: state.mode,
+        level: state.level,
+        rows: state.rows,
+        cols: state.cols,
+        tileTypes: state.tileTypes,
+        timeLimit: state.timeLimit,
+        timeLeft: state.timeLeft,
+        score: state.score,
+        best: state.best,
+        combo: state.combo,
+        hints: state.hints,
+        shuffles: state.shuffles,
+        remaining: state.remaining,
+        bgmOn: state.bgmOn,
+        grid: state.grid.slice(1, state.rows + 1).map(row => row.slice(1, state.cols + 1).map(cell => cell.type))
+      };
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* silent */ }
+    }
+
+    function loadProgress() {
+      try {
+        const data = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+        if (!data || !Array.isArray(data.grid) || data.remaining <= 0) return false;
+        if (isMobileLayout() && data.cols > 10) return false;
+        state.mode = data.mode === "endless" ? "endless" : "normal";
+        state.level = data.level || 1;
+        state.rows = data.rows;
+        state.cols = data.cols;
+        state.tileTypes = data.tileTypes;
+        state.timeLimit = data.timeLimit;
+        state.timeLeft = data.timeLeft;
+        state.score = data.score || 0;
+        state.best = Math.max(readBest(), data.best || 0);
+        state.combo = data.combo || 0;
+        state.hints = data.hints ?? CONFIG.hintCount;
+        state.shuffles = data.shuffles ?? CONFIG.shuffleCount;
+        state.remaining = data.remaining;
+        state.bgmOn = Boolean(data.bgmOn);
+        state.fullRows = state.rows + 2;
+        state.fullCols = state.cols + 2;
+        state.paused = true;
+        state.ended = false;
+        state.inGame = true;
+        resetGrid();
+        for (let row = 1; row <= state.rows; row++) {
+          for (let col = 1; col <= state.cols; col++) {
+            state.grid[row][col].type = data.grid[row - 1][col - 1] || 0;
+          }
+        }
+        if (!hasMoves() && state.remaining > 0) shuffleRemaining(true);
+        renderBoard();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function bootstrapEmptyBoard() {
+      const cfg = applyLevelDims(1);
+      state.timeLimit = cfg.timeLimit;
+      state.timeLeft = cfg.timeLimit;
+      state.remaining = 0;
+      resetGrid();
+      renderBoard();
+    }
+
+    window.addEventListener("resize", fitBoard);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopBgm();
+      } else if (state.bgmOn && state.inGame && !state.paused) {
+        startBgm();
+      }
+    });
+
+    const hasSave = loadProgress();
+    if (!hasSave) bootstrapEmptyBoard();
+    showMenu(hasSave);
+    updateHud();
+  </script>
+</body>
+</html>
