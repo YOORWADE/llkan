@@ -726,14 +726,14 @@
 </head>
 <body>
   <div class="decor" aria-hidden="true">
-    <span style="--x:6%;--y:14%;--s:36px;--d:0s">🍓</span>
-    <span style="--x:88%;--y:18%;--s:40px;--d:1.2s">🍭</span>
-    <span style="--x:16%;--y:74%;--s:34px;--d:2.1s">🍬</span>
-    <span style="--x:80%;--y:70%;--s:38px;--d:0.6s">🧁</span>
+    <span style="--x:6%;--y:14%;--s:36px;--d:0s">🐾</span>
+    <span style="--x:88%;--y:18%;--s:40px;--d:1.2s">🌿</span>
+    <span style="--x:16%;--y:74%;--s:34px;--d:2.1s">🥕</span>
+    <span style="--x:80%;--y:70%;--s:38px;--d:0.6s">🐟</span>
     <span style="--x:46%;--y:8%;--s:30px;--d:1.6s">⭐</span>
-    <span style="--x:30%;--y:40%;--s:28px;--d:2.6s">🍉</span>
-    <span style="--x:66%;--y:44%;--s:30px;--d:0.9s">🍇</span>
-    <span style="--x:92%;--y:48%;--s:26px;--d:1.9s">🌈</span>
+    <span style="--x:30%;--y:40%;--s:28px;--d:2.6s">🦴</span>
+    <span style="--x:66%;--y:44%;--s:30px;--d:0.9s">🍯</span>
+    <span style="--x:92%;--y:48%;--s:26px;--d:1.9s">🌸</span>
   </div>
 
   <main class="game-shell">
@@ -811,8 +811,8 @@
 
   <div class="menu open" id="menu" aria-hidden="false">
     <div class="menu-card" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
-      <h1 class="menu-title" id="menuTitle">🍬 豆豆 连连看 🍬</h1>
-      <p class="menu-text" id="menuText">可爱水果派对开场～找到相同图案，用不超过两次拐弯的路径连起来吧！</p>
+      <h1 class="menu-title" id="menuTitle">🐾 豆豆 连连看 🐾</h1>
+      <p class="menu-text" id="menuText">可爱动物派对开场～找到相同图案，用不超过两次拐弯的路径连起来吧！</p>
       <div class="menu-actions" id="menuActions"></div>
       <div class="menu-sub">选择关卡（共 100 关）</div>
       <div class="level-scroll">
@@ -844,7 +844,9 @@
     const SAVE_KEY = "qq-lianliankan-save-v3";
     const BEST_KEY = "qq-lianliankan-best-v3";
     const LEVEL_KEY = "qq-lianliankan-maxlevel-v3";
-    const ICONS = ["🍒","🍋","🍇","🍉","🍓","🥝","🍑","🍍","🥥","🥑","🍄","🌰","🍪","🍩","🍭","🍬","🧁","🍿","⭐","🌙","☀️","⚡","🔥","💧","🎲","🎯","🎹","🎧","🚀","💎","🔔","🌈"];
+    
+    // 这里是对图案唯一的改动：精心挑选的可爱动物主题 Emoji 🐾
+    const ICONS = ["🐱","🐶","🐰","🐻","🐼","🐨","🐷","🐸","🐵","🐧","🐤","🦉","🦊","🐯","🦁","🐹","🦄","🐝","🦋","🐞","🐠","🐢","🐙","🐳","🐬","🦭","🦔","🦦","🦥","🦕","🐥","🦩"];
     const RATING_LABELS = ["GOOD", "GREAT", "EXCELLENT", "PERFECT", "AMAZING", "LEGENDARY"];
 
     // === STATE ===
@@ -921,8 +923,6 @@
     // === WECHAT MINI-PROGRAM BRIDGE ===
     function isInMini() {
       try {
-        // __wxjs_environment 只有在真正的小程序 web-view 环境才会被微信置为 "miniprogram"。
-        // 注意：jweixin 脚本会在任意页面定义 wx.miniProgram，故不能用它来判断环境。
         if (window.__wxjs_environment === "miniprogram") return true;
         const ua = (navigator.userAgent || "").toLowerCase();
         return ua.indexOf("miniprogram") !== -1;
